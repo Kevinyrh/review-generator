@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>真人质感评价生成器</title>
+  <!-- 内联 SVG favicon，避免 favicon.ico 404 -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23FF7A45'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'>评</text></svg>">
+  <!-- 暗色 FOUC 预防：在 Tailwind 加载前根据 localStorage 决定 .dark，避免白屏闪烁 -->
+  <script>
+    (function () {
+      try {
+        var raw = localStorage.getItem('rrzpg:theme');
+        var t = raw ? JSON.parse(raw) : 'system';
+      } catch (e) { var t = 'system'; }
+      var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (dark) document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <!-- Tailwind CSS v3 CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { DEFAULT: '#FF7A45', hover: '#F26A35' },
+            bglight: '#FFF8F5',
+            bgdark: '#121212',
+            cardlight: '#FFFFFF',
+            carddark: '#1E1E1E',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :root { --brand: #FF7A45; --brand-hover: #F26A35; }
+    html, body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    body { -webkit-tap-highlight-color: transparent; }
+    /* 移动端可点击区域最小高度 */
+    .min-tap { min-height: 44px; }
+    /* 打字机闪烁光标 */
+    .cursor-blink::after { content: '▋'; animation: blink 1s steps(2) infinite; color: var(--brand); margin-left: 1px; }
+    .cursor-blink.done::after { animation: none; opacity: 0; }
+    @keyframes blink { 50% { opacity: 0; } }
+    /* 平滑显隐 */
+    .fade-in { animation: fadeIn 0.3s ease both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    /* 侧边栏滑入 */
+    .sidebar-open { transform: translateX(0) !important; }
+    /* 隐藏滚动条但保留滚动 */
+    .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.3); border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-bglight dark:bg-bgdark text-gray-800 dark:text-gray-100 min-h-screen transition-colors duration-300">
+  <div class="max-w-[480px] mx-auto min-h-screen flex flex-col relative">
+
+    <!-- 顶部导航栏：设置 + 标题 + 历史 + 暗黑模式 -->
+    <header class="flex items-center justify-between px-3 py-2 sticky top-0 bg-bglight/90 dark:bg-bgdark/90 backdrop-blur z-20 border-b border-gray-100 dark:border-gray-800">
+      <button id="btn-settings" aria-label="设置" class="min-tap w-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+        <!-- 齿轮图标 -->
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <h1 class="text-base font-semibold select-none">真人质感评价生成器</h1>
+      <div class="flex items-center">
+        <button id="btn-history" aria-label="历史记录" class="min-tap w-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <!-- 历史图标 -->
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
+          </svg>
+        </button>
+        <button id="btn-theme" aria-label="切换主题" class="min-tap w-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+          <!-- 太阳图标（浅色模式显示，点击切暗） -->
+          <svg id="icon-sun" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <!-- 月亮图标（暗色模式显示） -->
+          <svg id="icon-moon" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 主体内容区 -->
+    <main class="flex-1 px-5 pb-32 pt-4 space-y-5">
+
+      <!-- 评价类型选择 -->
+      <section>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">评价类型</p>
+        <div id="review-type-tags" class="flex flex-wrap gap-2"></div>
+      </section>
+
+      <!-- 场景选择 -->
+      <section>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">场景</p>
+        <div id="scenario-tags" class="flex flex-wrap gap-2"></div>
+      </section>
+
+      <!-- 关键词输入框 -->
+      <section>
+        <div id="quick-keywords" class="flex flex-wrap gap-2 mb-2"></div>
+        <input id="keyword-input" type="text" maxlength="30" autocomplete="off"
+          class="w-full h-11 rounded-xl px-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
+          placeholder="如：配送快，汤没撒">
+      </section>
+
+      <!-- 字数选择 -->
+      <section>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">字数</p>
+        <div id="word-count-tags" class="flex flex-wrap gap-2"></div>
+      </section>
+
+      <!-- 结果展示卡片（生成前隐藏） -->
+      <section id="result-card" class="hidden rounded-xl bg-white dark:bg-carddark p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition-all duration-300">
+        <div id="result-text" contenteditable="false" class="text-sm leading-relaxed whitespace-pre-wrap cursor-blink focus:outline-none focus:ring-2 focus:ring-brand/30 rounded-lg transition-shadow"></div>
+        <p id="result-error" class="hidden text-sm text-red-500 mt-2"></p>
+        <div class="text-right mt-3">
+          <span id="char-count" class="text-xs text-gray-400">共 0 字</span>
+        </div>
+      </section>
+
+      <!-- 操作按钮区（结果卡片下方，三按钮并排等宽） -->
+      <section id="result-actions" class="hidden flex gap-3">
+        <button id="btn-edit" class="flex-1 h-11 min-tap rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-medium active:scale-95 transition">编辑</button>
+        <button id="btn-copy" class="flex-1 h-11 min-tap rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-medium active:scale-95 transition">一键复制</button>
+        <button id="btn-regenerate" class="flex-1 h-11 min-tap rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-medium active:scale-95 transition">换一条</button>
+      </section>
+
+      <!-- 免责声明 -->
+      <p class="text-xs text-gray-400 text-center leading-relaxed pt-2 px-2">
+        本工具仅用于辅助润色真实评价，禁止用于虚假评价刷单，请遵守各平台规则
+      </p>
+    </main>
+
+    <!-- 底部生成按钮（固定底部，loading 时文字变「生成中...」+ 旋转图标） -->
+    <footer class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] px-5 pb-5 pt-3 bg-bglight/90 dark:bg-bgdark/90 backdrop-blur z-20">
+      <button id="btn-generate"
+        class="w-full h-12 rounded-full bg-brand text-white font-medium active:scale-95 transition disabled:opacity-60 flex items-center justify-center gap-2">
+        <svg id="gen-spinner" class="hidden animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/>
+        </svg>
+        <span id="gen-btn-text">生成评价</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div id="settings-overlay" class="hidden fixed inset-0 bg-black/50 z-40 flex items-end sm:items-center justify-center p-4">
+    <div class="w-full max-w-[420px] rounded-xl bg-white dark:bg-carddark p-5 space-y-4 fade-in">
+      <div class="flex justify-between items-center">
+        <h2 class="font-semibold text-base">API 设置</h2>
+        <button id="settings-close" class="min-tap w-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="关闭">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">API Key</label>
+        <input id="settings-apikey" type="password" autocomplete="off"
+          class="w-full h-11 rounded-xl px-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
+          placeholder="sk-...">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">接口地址（留空用默认，不含 /chat/completions）</label>
+        <input id="settings-baseurl" type="text" autocomplete="off"
+          class="w-full h-11 rounded-xl px-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
+          placeholder="https://api.deepseek.com/v1">
+        <span class="block text-[11px] text-gray-400 mt-1">默认 DeepSeek（支持浏览器直连），也可换其他 OpenAI 兼容地址</span>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">模型名称</label>
+        <input id="settings-model" type="text" autocomplete="off"
+          class="w-full h-11 rounded-xl px-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
+          placeholder="deepseek-chat">
+      </div>
+      <button id="settings-save" class="w-full h-12 min-tap rounded-full bg-brand text-white font-medium active:scale-95 transition">保存</button>
+    </div>
+  </div>
+
+  <!-- 历史记录侧边栏 -->
+  <div id="history-overlay" class="hidden fixed inset-0 bg-black/40 z-40"></div>
+  <aside id="history-sidebar" class="fixed top-0 right-0 h-full w-[85%] max-w-[360px] bg-white dark:bg-carddark z-50 translate-x-full transition-transform duration-300 flex flex-col">
+    <header class="flex items-center justify-between p-4 border-b dark:border-gray-700 shrink-0">
+      <h2 class="font-semibold text-base">历史记录</h2>
+      <div class="flex items-center gap-1">
+        <button id="btn-clear-history" class="text-xs text-red-500 min-tap px-3 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition">清空</button>
+        <button id="history-close" class="min-tap w-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="关闭">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </header>
+    <div id="history-list" class="overflow-y-auto p-3 space-y-2 flex-1 scrollbar-thin"></div>
+  </aside>
+
+  <!-- Toast 轻提示 -->
+  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-black/80 text-white text-sm z-50 whitespace-nowrap max-w-[90%] text-center"></div>
+
+  <!-- 脚本按依赖顺序加载：config → storage → api → app -->
+  <script src="js/config.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
