@@ -178,7 +178,7 @@
     }
     input.value = current ? `${current}，${word}` : word;
     state.keyword = input.value;
-    input.focus();
+    // 不 focus 输入框，避免移动端弹出键盘
   }
 
   /* ============================================================

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>真人质感评价生成器</title>
   <!-- 内联 SVG favicon，避免 favicon.ico 404 -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23FF7A45'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'>评</text></svg>">
@@ -108,7 +108,7 @@
       <section>
         <div id="quick-keywords" class="flex flex-wrap gap-2 mb-2"></div>
         <input id="keyword-input" type="text" maxlength="30" autocomplete="off"
-          class="w-full h-11 rounded-xl px-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
+          class="w-full h-11 rounded-xl px-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-base focus:border-brand focus:outline-none transition-colors"
           placeholder="如：配送快，汤没撒">
       </section>
 
@@ -120,7 +120,7 @@
 
       <!-- 结果展示卡片（生成前隐藏） -->
       <section id="result-card" class="hidden rounded-xl bg-white dark:bg-carddark p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition-all duration-300">
-        <div id="result-text" contenteditable="false" class="text-sm leading-relaxed whitespace-pre-wrap cursor-blink focus:outline-none focus:ring-2 focus:ring-brand/30 rounded-lg transition-shadow"></div>
+        <div id="result-text" contenteditable="false" class="text-base leading-relaxed whitespace-pre-wrap cursor-blink focus:outline-none focus:ring-2 focus:ring-brand/30 rounded-lg transition-shadow"></div>
         <p id="result-error" class="hidden text-sm text-red-500 mt-2"></p>
         <div class="text-right mt-3">
           <span id="char-count" class="text-xs text-gray-400">共 0 字</span>
