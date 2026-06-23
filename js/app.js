@@ -300,10 +300,11 @@
     // 若正在编辑，先退出编辑态
     if (state.editing) onEdit();
 
-    // 未配置 API Key → 引导设置
-    if (!state.settings.apiKey) {
+    // 检查 API 配置：如果使用云函数代理（默认配置自带 baseUrl），无需 apiKey
+    // 只有当用户清空了 baseUrl 且没填 apiKey 时，才引导设置
+    if (!state.settings.baseUrl && !state.settings.apiKey) {
       openSettings();
-      toast('请先配置 API Key');
+      toast('请先配置 API Key 或接口地址');
       return;
     }
 

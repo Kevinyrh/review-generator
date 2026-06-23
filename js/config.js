@@ -11,7 +11,7 @@
     /* ========== 1. API 默认参数 ========== */
     api: {
       defaultModel: 'deepseek-chat',
-      defaultBaseUrl: 'https://api.deepseek.com/v1', // DeepSeek 原生支持浏览器 CORS 直连
+      defaultBaseUrl: 'https://1446064753-3bfj9kkdjr.ap-guangzhou.tencentscf.com', // 腾讯云函数代理（内置 API Key，用户无需配置）
       officialBaseUrl: 'https://api.deepseek.com/v1',
       chatCompletionsPath: '/chat/completions',      // 拼接用，base_url 不含此段
       temperature: 0.9,                              // 固定，追求真人手写的多样性，不暴露给用户

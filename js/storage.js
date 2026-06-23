@@ -89,7 +89,7 @@
     const s = safeGet(KEYS.settings, null);
     return {
       apiKey: (s && s.apiKey) || '',
-      baseUrl: (s && s.baseUrl) || '',
+      baseUrl: (s && s.baseUrl !== undefined) ? s.baseUrl : window.CONFIG.api.defaultBaseUrl,
       model: (s && s.model) || window.CONFIG.api.defaultModel,
     };
   }
