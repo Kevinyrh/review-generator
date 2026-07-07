@@ -15,6 +15,8 @@
   const state = {
     reviewType: 'good',       // 当前评价类型 id
     scenario: 'waimai',       // 当前场景 id
+    isCustomScenario: false,  // 是否为自定义场景
+    customScenarioName: '',   // 自定义场景名称
     keyword: '',              // 关键词
     wordCount: 'medium',      // 字数档位 id
     platform: 'general',      // 平台风格 id
@@ -77,6 +79,25 @@
    * 三、工具函数
    * ============================================================ */
 
+  // 获取当前场景配置（支持自定义场景）
+  function getCurrentScenario() {
+    if (state.isCustomScenario) {
+      // 返回一个合成的场景对象
+      const base = CONFIG.customScenario;
+      return {
+        id: 'custom',
+        label: state.customScenarioName || '自定义',
+        placeholder: base.placeholder,
+        dimensions: base.dimensions,
+        descriptors: base.descriptors,
+        flaws: base.flaws,
+        quickKeywords: base.quickKeywords,
+        negativeQuickKeywords: base.negativeQuickKeywords,
+      };
+    }
+    return CONFIG.scenarios.find((x) => x.id === state.scenario);
+  }
+
   // 按 id 查 label
   function labelOf(list, id) {
     const item = list.find((x) => x.id === id);
@@ -99,6 +120,21 @@
     toastTimer = setTimeout(() => dom.toast.classList.add('hidden'), CONFIG.ui.copyToastMs);
   }
 
+  /* 自定义场景：点击后用 prompt 让用户输入场景名 */
+  function onCustomScenarioClick() {
+    const name = window.prompt('请输入自定义场景名称，如：美甲、洗车、驾校等', state.customScenarioName || '');
+    if (name && name.trim()) {
+      state.isCustomScenario = true;
+      state.customScenarioName = name.trim();
+      state.scenario = 'custom';
+      setState({ scenario: 'custom' });
+      toast(`已切换到「${name.trim()}」场景`);
+    } else if (name === '' || name === null) {
+      // 用户取消或清空，不切换
+      return;
+    }
+  }
+
   // 结果清洗：去首尾成对引号、去常见前缀（模型偶尔不听话的兜底）
   function cleanResult(text) {
     let t = text.trim();
@@ -117,7 +153,7 @@
    * ============================================================ */
 
   function tagClass(selected) {
-    const base = 'min-tap rounded-full px-4 text-sm font-medium active:scale-95 transition whitespace-nowrap flex items-center';
+    const base = 'min-tap rounded-full px-4 text-sm font-medium active:scale-95 transition whitespace-nowrap flex items-center gap-1';
     return selected
       ? `${base} bg-brand text-white`
       : `${base} bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-[#2a2a2a] dark:text-gray-300 dark:hover:bg-[#333]`;
@@ -129,7 +165,9 @@
       const btn = document.createElement('button');
       btn.className = tagClass(item.id === currentId);
       btn.style.height = '36px';
-      btn.textContent = item.label;
+      // 支持 emoji 前缀：优先用 emoji，其次直接用 label
+      const prefix = item.emoji || '';
+      btn.textContent = prefix ? `${prefix} ${item.label}` : item.label;
       btn.addEventListener('click', () => onSelect(item.id));
       container.appendChild(btn);
     });
@@ -137,18 +175,49 @@
 
   function renderTags() {
     renderTagGroup(dom['review-type-tags'], CONFIG.reviewTypes, state.reviewType, (id) => setState({ reviewType: id }));
-    renderTagGroup(dom['scenario-tags'], CONFIG.scenarios, state.scenario, (id) => setState({ scenario: id }));
+    // 场景特殊渲染：预设场景 + 末尾"自定义"按钮
+    renderScenarioTags();
     renderTagGroup(dom['word-count-tags'], CONFIG.wordCounts, state.wordCount, (id) => setState({ wordCount: id }));
   }
 
+  /* 场景标签：预设列表 + 自定义按钮（横向滚动容器末尾） */
+  function renderScenarioTags() {
+    const container = dom['scenario-tags'];
+    container.innerHTML = '';
+    // 渲染所有预设场景
+    CONFIG.scenarios.forEach((item) => {
+      const btn = document.createElement('button');
+      const isSelected = state.scenario === item.id && !state.isCustomScenario;
+      btn.className = tagClass(isSelected);
+      btn.style.height = '36px';
+      btn.style.flexShrink = '0';
+      btn.textContent = `${item.emoji} ${item.label}`;
+      btn.addEventListener('click', () => {
+        state.isCustomScenario = false;
+        state.customScenarioName = '';
+        setState({ scenario: item.id });
+      });
+      container.appendChild(btn);
+    });
+    // 末尾"自定义"按钮
+    const customBtn = document.createElement('button');
+    const isCustomSelected = state.isCustomScenario;
+    customBtn.className = tagClass(isCustomSelected);
+    customBtn.style.height = '36px';
+    customBtn.style.flexShrink = '0';
+    customBtn.textContent = `✏️ 自定义`;
+    customBtn.addEventListener('click', () => onCustomScenarioClick());
+    container.appendChild(customBtn);
+  }
+
   function updatePlaceholder() {
-    const sc = CONFIG.scenarios.find((x) => x.id === state.scenario);
+    const sc = getCurrentScenario();
     if (sc) dom['keyword-input'].placeholder = sc.placeholder;
   }
 
   /* 渲染当前场景的关键词快选标签（差评/严重避雷显示负面词，其余显示正面词） */
   function renderQuickKeywords() {
-    const sc = CONFIG.scenarios.find((x) => x.id === state.scenario);
+    const sc = getCurrentScenario();
     const container = dom['quick-keywords'];
     container.innerHTML = '';
     if (!sc) return;
@@ -260,9 +329,9 @@
    * 七、Prompt 5 维拼接
    * ============================================================ */
 
-  // 维度 3：场景专属细节库（从 scenarios 数据动态生成）
+  // 维度 3：场景专属细节库（从 scenarios 数据动态生成，支持自定义）
   function buildScenarioPrompt(scenarioId) {
-    const s = CONFIG.scenarios.find((x) => x.id === scenarioId);
+    const s = getCurrentScenario();
     if (!s) return '';
     return `当前场景：${s.label}。
 可参考的体验维度（不必全提，挑 1-3 个自然融入）：${s.dimensions.join('、')}。

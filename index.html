@@ -98,10 +98,16 @@
         <div id="review-type-tags" class="flex flex-wrap gap-2"></div>
       </section>
 
-      <!-- 场景选择 -->
+      <!-- 场景类型选择（横向滑动） -->
       <section>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">场景</p>
-        <div id="scenario-tags" class="flex flex-wrap gap-2"></div>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-gray-500 dark:text-gray-400">场景类型</p>
+          <p class="text-xs text-gray-400 dark:text-gray-500">左右滑动 👉</p>
+        </div>
+        <div id="scenario-tags" class="flex gap-2 overflow-x-auto scrollbar-thin pb-1" style="-webkit-overflow-scrolling: touch; -ms-overflow-style: none; scrollbar-width: none;">
+          <!-- 隐藏滚动条但保留滚动 -->
+          <style>#scenario-tags::-webkit-scrollbar { display: none; }</style>
+        </div>
       </section>
 
       <!-- 关键词输入框 -->
