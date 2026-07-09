@@ -21,10 +21,10 @@
       streamFirstTokenTimeoutMs: 15000,              // 流式首 token 超时，触发降级
     },
 
-    /* ========== 2. 评价类型（5 档，默认满意） ========== */
+    /* ========== 2. 评价类型（5 档，默认超赞） ========== */
     reviewTypes: [
-      { id: 'super-good', label: '超赞', emoji: '🤩', color: '#F07040' },
-      { id: 'good', label: '满意', emoji: '😊', color: '#4CAF82', default: true },
+      { id: 'super-good', label: '超赞', emoji: '🤩', color: '#F07040', default: true },
+      { id: 'good', label: '满意', emoji: '😊', color: '#4CAF82' },
       { id: 'fair', label: '一般', emoji: '🤔', color: '#7B8FA6' },
       { id: 'bad', label: '不满', emoji: '😤', color: '#E05252' },
       { id: 'severe-bad', label: '避雷', emoji: '⚠️', color: '#D4830A' },
@@ -33,22 +33,10 @@
     /* ========== 3. 场景库（7 个预设 + 1 自定义，含细节维度/常用描述词/微瑕疵词库/快捷关键词） ========== */
     scenarios: [
       {
-        id: 'waimai',
-        label: '外卖',
-        emoji: '🛵',
-        default: true,
-        platforms: ['美团外卖', '饿了么'],
-        placeholder: '如：配送快，汤没撒',
-        dimensions: ['配送速度', '包装完整度', '食物温度', '分量', '口味', '性价比'],
-        descriptors: ['送得挺快', '包装严实没漏', '拿到还热乎', '份量挺足', '味道蛮正', '性价比还行'],
-        flaws: ['汤稍微洒了一点点', '米饭有点偏软', '等了十多分钟', '餐盒边角有点压扁'],
-        quickKeywords: ['配送快', '量大', '没撒', '热乎'],
-        negativeQuickKeywords: ['配送慢', '量少', '汤撒了', '凉了'],
-      },
-      {
         id: 'tangshi',
         label: '堂食',
         emoji: '🍜',
+        default: true,
         platforms: ['大众点评', '小红书', '抖音'],
         placeholder: '如：火锅，毛肚很脆',
         dimensions: ['环境氛围', '服务态度', '排队情况', '菜品口味', '上菜速度', '卫生'],
@@ -56,6 +44,18 @@
         flaws: ['周末人有点多要等位', '停车不太方便', '空调开得有点冷', '地面有点滑'],
         quickKeywords: ['味道正', '环境好', '上菜快', '性价比'],
         negativeQuickKeywords: ['味道差', '上菜慢', '服务差', '不卫生'],
+      },
+      {
+        id: 'waimai',
+        label: '外卖',
+        emoji: '🛵',
+        platforms: ['美团外卖', '饿了么'],
+        placeholder: '如：配送快，汤没撒',
+        dimensions: ['配送速度', '包装完整度', '食物温度', '分量', '口味', '性价比'],
+        descriptors: ['送得挺快', '包装严实没漏', '拿到还热乎', '份量挺足', '味道蛮正', '性价比还行'],
+        flaws: ['汤稍微洒了一点点', '米饭有点偏软', '等了十多分钟', '餐盒边角有点压扁'],
+        quickKeywords: ['配送快', '量大', '没撒', '热乎'],
+        negativeQuickKeywords: ['配送慢', '量少', '汤撒了', '凉了'],
       },
       {
         id: 'lifa',
