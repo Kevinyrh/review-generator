@@ -69,7 +69,7 @@
       'sheet-close', 'sheet-handle-close',
       'btn-edit', 'btn-copy', 'btn-regenerate',
       'btn-generate', 'gen-btn-text',
-      'btn-settings', 'btn-history', 'btn-theme', 'icon-theme',
+      'btn-history', 'btn-theme', 'icon-theme',
       'settings-overlay', 'settings-close', 'settings-apikey', 'settings-baseurl',
       'settings-model', 'settings-save',
       'history-overlay', 'history-sidebar', 'history-close', 'btn-clear-history', 'history-list',
@@ -701,8 +701,7 @@
       closeResultSheet();
     });
 
-    // 设置弹窗
-    dom['btn-settings'].addEventListener('click', openSettings);
+    // 设置弹窗（保留功能，但按钮已从UI移除）
     dom['settings-close'].addEventListener('click', closeSettings);
     dom['settings-save'].addEventListener('click', saveSettings);
     dom['settings-overlay'].addEventListener('click', (e) => {
