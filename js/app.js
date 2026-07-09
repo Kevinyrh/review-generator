@@ -1,7 +1,7 @@
 /**
- * app.js —— 主业务逻辑
- * 职责：状态管理、UI 渲染、事件绑定、Prompt 5 维拼接、生成/复制/换一条主链路、
- *       历史记录、设置弹窗、暗黑模式。
+ * app.js —— 主业务逻辑（v2 UI 设计系统）
+ * 职责：状态管理、UI 渲染（卡片化+动态情绪色）、事件绑定、Prompt 5 维拼接、
+ *       流式生成/复制/换一条主链路、历史记录、设置弹窗、主题切换。
  * 依赖：window.CONFIG / window.Store / window.API（按 config→storage→api→app 顺序加载）。
  */
 (function () {
@@ -13,45 +13,45 @@
    * 一、全局状态
    * ============================================================ */
   const state = {
-    reviewType: 'good',       // 当前评价类型 id
-    scenario: 'waimai',       // 当前场景 id
-    isCustomScenario: false,  // 是否为自定义场景
-    customScenarioName: '',   // 自定义场景名称
-    keyword: '',              // 关键词
-    wordCount: 'medium',      // 字数档位 id
-    platform: 'general',      // 平台风格 id
-    generating: false,        // 是否正在流式生成
-    editing: false,           // 是否正在编辑结果
-    result: '',               // 当前结果文本
-    abortController: null,    // 取消当前流的控制器
+    reviewType: 'good',
+    scenario: 'waimai',
+    isCustomScenario: false,
+    customScenarioName: '',
+    keyword: '',
+    wordCount: 'medium',
+    platform: 'general',
+    generating: false,
+    editing: false,
+    result: '',
+    abortController: null,
     settings: Store.getSettings(),
     theme: Store.getTheme(),
   };
 
-  // 从 CONFIG 读取默认选中项，初始化 state
   function initDefaults() {
     const rt = CONFIG.reviewTypes.find((x) => x.default);
     const sc = CONFIG.scenarios.find((x) => x.default);
     const wc = CONFIG.wordCounts.find((x) => x.default);
-    const pf = CONFIG.platforms.find((x) => x.default);
     if (rt) state.reviewType = rt.id;
     if (sc) state.scenario = sc.id;
     if (wc) state.wordCount = wc.id;
-    if (pf) state.platform = pf.id;
   }
 
-  /* 状态变更统一入口：浅合并 + 触发相关 render */
+  /* 状态变更统一入口 */
   function setState(patch) {
     Object.assign(state, patch);
-    if ('reviewType' in patch || 'scenario' in patch || 'wordCount' in patch || 'platform' in patch) renderTags();
+    if ('reviewType' in patch || 'scenario' in patch || 'wordCount' in patch) renderTags();
     if ('scenario' in patch || 'reviewType' in patch) {
-      // 切换场景或评价类型时清空关键词（不同场景/类型的词不通用）
       state.keyword = '';
       dom['keyword-input'].value = '';
       updatePlaceholder();
       renderQuickKeywords();
     }
-    if ('generating' in patch || 'settings' in patch) updateGenerateBtn();
+    if ('reviewType' in patch) {
+      applyMoodColor();
+      updateGenBtnText();
+    }
+    if ('generating' in patch) updateGenBtn();
   }
 
   /* ============================================================
@@ -64,30 +64,49 @@
     [
       'review-type-tags', 'scenario-tags', 'word-count-tags',
       'keyword-input', 'quick-keywords',
-      'result-card', 'result-text', 'result-error', 'char-count',
-      'result-actions', 'btn-edit', 'btn-copy', 'btn-regenerate',
+      'sheet-overlay', 'result-text', 'result-error', 'char-count',
+      'meta-scene', 'meta-mood', 'platform-row', 'platform-label',
+      'btn-edit', 'btn-copy', 'btn-regenerate',
       'btn-generate', 'gen-spinner', 'gen-btn-text',
-      'btn-settings', 'btn-history', 'btn-theme', 'icon-sun', 'icon-moon',
+      'btn-settings', 'btn-history', 'btn-theme', 'icon-theme',
       'settings-overlay', 'settings-close', 'settings-apikey', 'settings-baseurl',
       'settings-model', 'settings-save',
       'history-overlay', 'history-sidebar', 'history-close', 'btn-clear-history', 'history-list',
-      'toast',
+      'toast', 'mood-card',
     ].forEach((id) => { dom[id] = $(id); });
   }
 
   /* ============================================================
-   * 三、工具函数
+   * 三、动态情绪色系统
+   * ============================================================ */
+  function applyMoodColor() {
+    const rt = CONFIG.reviewTypes.find((x) => x.id === state.reviewType);
+    if (!rt || !rt.color) return;
+    const root = document.documentElement;
+    root.style.setProperty('--current-mood', rt.color);
+    root.style.setProperty('--current-mood-light', hexToRgba(rt.color, 0.12));
+  }
+
+  function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  /* ============================================================
+   * 四、工具函数
    * ============================================================ */
 
-  // 获取当前场景配置（支持自定义场景）
   function getCurrentScenario() {
     if (state.isCustomScenario) {
-      // 返回一个合成的场景对象
       const base = CONFIG.customScenario;
       return {
         id: 'custom',
         label: state.customScenarioName || '自定义',
+        emoji: '✏️',
         placeholder: base.placeholder,
+        platforms: base.platforms,
         dimensions: base.dimensions,
         descriptors: base.descriptors,
         flaws: base.flaws,
@@ -98,29 +117,46 @@
     return CONFIG.scenarios.find((x) => x.id === state.scenario);
   }
 
-  // 按 id 查 label
   function labelOf(list, id) {
     const item = list.find((x) => x.id === id);
     return item ? item.label : id;
   }
 
-  // 格式化时间 MM-DD HH:mm
   function formatTime(ts) {
     const d = new Date(ts);
     const pad = (n) => String(n).padStart(2, '0');
     return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  // Toast 轻提示
   let toastTimer = null;
   function toast(msg) {
     dom.toast.textContent = msg;
-    dom.toast.classList.remove('hidden');
+    dom.toast.classList.add('show');
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => dom.toast.classList.add('hidden'), CONFIG.ui.copyToastMs);
+    toastTimer = setTimeout(() => dom.toast.classList.remove('show'), 2000);
   }
 
-  /* 自定义场景：点击后用 prompt 让用户输入场景名 */
+  function cleanResult(text) {
+    let t = text.trim();
+    if (/^["“”'']/.test(t) && /["“”'']$/.test(t)) t = t.slice(1, -1);
+    t = t.replace(/^(评价|好评|差评|中肯评价|中肯|评论|满意|不满)\s*[:：]\s*/, '');
+    return t.trim();
+  }
+
+  function countChars(text) {
+    return [...text].length;
+  }
+
+  function escapeHTML(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /* 自定义场景 */
   function onCustomScenarioClick() {
     const name = window.prompt('请输入自定义场景名称，如：美甲、洗车、驾校等', state.customScenarioName || '');
     if (name && name.trim()) {
@@ -129,69 +165,35 @@
       state.scenario = 'custom';
       setState({ scenario: 'custom' });
       toast(`已切换到「${name.trim()}」场景`);
-    } else if (name === '' || name === null) {
-      // 用户取消或清空，不切换
-      return;
     }
   }
 
-  // 结果清洗：去首尾成对引号、去常见前缀（模型偶尔不听话的兜底）
-  function cleanResult(text) {
-    let t = text.trim();
-    if (/^["“”'']/.test(t) && /["“”'']$/.test(t)) t = t.slice(1, -1);
-    t = t.replace(/^(评价|好评|差评|中肯评价|中肯|评论)\s*[:：]\s*/, '');
-    return t.trim();
-  }
-
-  // 计算中文字数（按字符计，与平台字数统计习惯一致）
-  function countChars(text) {
-    return [...text].length;
-  }
-
   /* ============================================================
-   * 四、Tag 渲染（CONFIG 驱动，避免硬编码）
+   * 五、标签渲染（卡片化）
    * ============================================================ */
 
-  function tagClass(selected) {
-    const base = 'min-tap rounded-full px-4 text-sm font-medium active:scale-95 transition whitespace-nowrap flex items-center gap-1';
-    return selected
-      ? `${base} bg-brand text-white`
-      : `${base} bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-[#2a2a2a] dark:text-gray-300 dark:hover:bg-[#333]`;
-  }
-
-  function renderTagGroup(container, list, currentId, onSelect) {
+  /* 评价类型：mood-opt 卡片 */
+  function renderReviewTypeTags() {
+    const container = dom['review-type-tags'];
     container.innerHTML = '';
-    list.forEach((item) => {
-      const btn = document.createElement('button');
-      btn.className = tagClass(item.id === currentId);
-      btn.style.height = '36px';
-      // 支持 emoji 前缀：优先用 emoji，其次直接用 label
-      const prefix = item.emoji || '';
-      btn.textContent = prefix ? `${prefix} ${item.label}` : item.label;
-      btn.addEventListener('click', () => onSelect(item.id));
+    CONFIG.reviewTypes.forEach((item) => {
+      const btn = document.createElement('div');
+      btn.className = `mood-opt${item.id === state.reviewType ? ' active' : ''}`;
+      btn.innerHTML = `<span class="mood-emoji">${item.emoji}</span><span class="mood-name">${item.label}</span>`;
+      btn.addEventListener('click', () => setState({ reviewType: item.id }));
       container.appendChild(btn);
     });
   }
 
-  function renderTags() {
-    renderTagGroup(dom['review-type-tags'], CONFIG.reviewTypes, state.reviewType, (id) => setState({ reviewType: id }));
-    // 场景特殊渲染：预设场景 + 末尾"自定义"按钮
-    renderScenarioTags();
-    renderTagGroup(dom['word-count-tags'], CONFIG.wordCounts, state.wordCount, (id) => setState({ wordCount: id }));
-  }
-
-  /* 场景标签：预设列表 + 自定义按钮（横向滚动容器末尾） */
+  /* 消费场景：scene-item 卡片 */
   function renderScenarioTags() {
     const container = dom['scenario-tags'];
     container.innerHTML = '';
-    // 渲染所有预设场景
     CONFIG.scenarios.forEach((item) => {
-      const btn = document.createElement('button');
+      const btn = document.createElement('div');
       const isSelected = state.scenario === item.id && !state.isCustomScenario;
-      btn.className = tagClass(isSelected);
-      btn.style.height = '36px';
-      btn.style.flexShrink = '0';
-      btn.textContent = `${item.emoji} ${item.label}`;
+      btn.className = `scene-item${isSelected ? ' active' : ''}`;
+      btn.innerHTML = `<span class="s-icon">${item.emoji}</span><span class="s-name">${item.label}</span>`;
       btn.addEventListener('click', () => {
         state.isCustomScenario = false;
         state.customScenarioName = '';
@@ -199,15 +201,32 @@
       });
       container.appendChild(btn);
     });
-    // 末尾"自定义"按钮
-    const customBtn = document.createElement('button');
-    const isCustomSelected = state.isCustomScenario;
-    customBtn.className = tagClass(isCustomSelected);
-    customBtn.style.height = '36px';
-    customBtn.style.flexShrink = '0';
-    customBtn.textContent = `✏️ 自定义`;
+    // 自定义按钮
+    const customBtn = document.createElement('div');
+    customBtn.className = `scene-item${state.isCustomScenario ? ' active' : ''}`;
+    const customLabel = state.customScenarioName ? state.customScenarioName.slice(0, 4) : '自定义';
+    customBtn.innerHTML = `<span class="s-icon">＋</span><span class="s-name">${escapeHTML(customLabel)}</span>`;
     customBtn.addEventListener('click', () => onCustomScenarioClick());
     container.appendChild(customBtn);
+  }
+
+  /* 字数：len-opt 卡片 */
+  function renderWordCountTags() {
+    const container = dom['word-count-tags'];
+    container.innerHTML = '';
+    CONFIG.wordCounts.forEach((item) => {
+      const btn = document.createElement('div');
+      btn.className = `len-opt${item.id === state.wordCount ? ' active' : ''}`;
+      btn.innerHTML = `<span class="len-name">${item.label}</span><span class="len-chars">${item.chars || ''}</span>`;
+      btn.addEventListener('click', () => setState({ wordCount: item.id }));
+      container.appendChild(btn);
+    });
+  }
+
+  function renderTags() {
+    renderReviewTypeTags();
+    renderScenarioTags();
+    renderWordCountTags();
   }
 
   function updatePlaceholder() {
@@ -215,74 +234,100 @@
     if (sc) dom['keyword-input'].placeholder = sc.placeholder;
   }
 
-  /* 渲染当前场景的关键词快选标签（差评/严重避雷显示负面词，其余显示正面词） */
+  /* 关键词：kw-chip（支持选中/取消切换） */
   function renderQuickKeywords() {
     const sc = getCurrentScenario();
     const container = dom['quick-keywords'];
     container.innerHTML = '';
     if (!sc) return;
-    // 差评和严重避雷显示负面快选词，其余显示正面
     const isNegative = state.reviewType === 'bad' || state.reviewType === 'severe-bad';
     const words = isNegative ? sc.negativeQuickKeywords : sc.quickKeywords;
     if (!words || words.length === 0) return;
+    const selected = getSelectedKeywords();
     words.forEach((word) => {
-      const btn = document.createElement('button');
-      const colorClass = isNegative
-        ? 'hover:border-red-400 hover:text-red-500 dark:hover:border-red-500 dark:hover:text-red-400'
-        : 'hover:border-brand hover:text-brand dark:hover:border-brand dark:hover:text-brand';
-      btn.className = `h-7 px-3 rounded-full text-xs bg-gray-50 text-gray-500 border border-gray-200 ${colorClass} dark:bg-[#2a2a2a] dark:text-gray-400 dark:border-gray-700 active:scale-95 transition`;
-      btn.textContent = '+ ' + word;
-      btn.addEventListener('click', () => onQuickKeyword(word));
-      container.appendChild(btn);
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      const isAdded = selected.includes(word);
+      chip.className = `kw-chip${isAdded ? ' added' : ''}`;
+      chip.innerHTML = `<span class="kw-plus">${isAdded ? '✓' : '+'}</span> ${escapeHTML(word)}`;
+      chip.addEventListener('click', () => toggleKeyword(word));
+      container.appendChild(chip);
     });
   }
 
-  /* 点击快选关键词：追加到输入框（已有则不重复） */
-  function onQuickKeyword(word) {
-    const input = dom['keyword-input'];
-    const current = input.value.trim();
-    if (current && current.includes(word)) {
-      toast('已添加过该关键词');
-      return;
+  function getSelectedKeywords() {
+    return dom['keyword-input'].value
+      .split(/[，,]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  function toggleKeyword(word) {
+    const words = getSelectedKeywords();
+    if (words.includes(word)) {
+      // 取消选中
+      const newList = words.filter((w) => w !== word);
+      dom['keyword-input'].value = newList.join('，');
+    } else {
+      // 添加
+      const newList = [...words, word];
+      dom['keyword-input'].value = newList.join('，');
     }
-    input.value = current ? `${current}，${word}` : word;
-    state.keyword = input.value;
-    // 不 focus 输入框，避免移动端弹出键盘
+    state.keyword = dom['keyword-input'].value;
+    renderQuickKeywords();
   }
 
   /* ============================================================
-   * 五、生成按钮状态
+   * 六、生成按钮
    * ============================================================ */
-  function updateGenerateBtn() {
+  const genBtnTexts = {
+    'super-good': '帮我写一条超赞好评 ✨',
+    'good': '帮我写一条满意好评',
+    'fair': '帮我写一条中肯评价',
+    'bad': '帮我写一条不满反馈',
+    'severe-bad': '帮我写一条避雷评价 ⚠️',
+  };
+
+  function updateGenBtnText() {
+    dom['gen-btn-text'].textContent = genBtnTexts[state.reviewType] || '帮我写一条评价';
+  }
+
+  function updateGenBtn() {
     if (state.generating) {
       dom['btn-generate'].disabled = true;
       dom['gen-btn-text'].textContent = '生成中...';
       dom['gen-spinner'].classList.remove('hidden');
     } else {
       dom['btn-generate'].disabled = false;
-      dom['gen-btn-text'].textContent = '生成评价';
+      updateGenBtnText();
       dom['gen-spinner'].classList.add('hidden');
     }
   }
 
   /* ============================================================
-   * 六、结果卡片显隐
+   * 七、结果 Sheet
    * ============================================================ */
-  function showResultCard() {
-    dom['result-card'].classList.remove('hidden');
-    dom['result-card'].classList.add('fade-in');
-    dom['result-actions'].classList.remove('hidden');
-    dom['result-actions'].classList.add('flex');
+  function showResultSheet() {
+    dom['sheet-overlay'].classList.add('show');
+    const sc = getCurrentScenario();
+    const rt = CONFIG.reviewTypes.find((x) => x.id === state.reviewType);
+    dom['meta-scene'].textContent = sc ? sc.label : '场景';
+    dom['meta-mood'].textContent = rt ? rt.label : '评价';
+  }
+
+  function closeResultSheet() {
+    dom['sheet-overlay'].classList.remove('show');
   }
 
   function resetResultUI() {
     dom['result-text'].textContent = '';
-    dom['result-text'].classList.remove('done');
     dom['result-text'].setAttribute('contenteditable', 'false');
     dom['result-error'].classList.add('hidden');
     dom['result-error'].textContent = '';
-    dom['char-count'].textContent = '共 0 字';
-    // 重置编辑按钮文案
+    dom['char-count'].textContent = '';
+    dom['platform-label'].style.display = 'none';
+    // 清除旧的平台标签
+    dom['platform-row'].querySelectorAll('.platform-hint').forEach((el) => el.remove());
     dom['btn-edit'].textContent = '编辑';
     state.editing = false;
   }
@@ -290,25 +335,34 @@
   function showError(msg) {
     dom['result-error'].textContent = msg;
     dom['result-error'].classList.remove('hidden');
-    dom['result-text'].classList.add('done');
-    dom['result-text'].classList.remove('cursor-blink');
+    dom['result-text'].innerHTML = '';
   }
 
   function updateCharCount(text) {
-    dom['char-count'].textContent = `共 ${countChars(text)} 字`;
+    dom['char-count'].textContent = `${countChars(text)} 字`;
   }
 
-  /* 切换结果编辑态 */
+  function showPlatforms() {
+    const sc = getCurrentScenario();
+    if (!sc || !sc.platforms) return;
+    dom['platform-label'].style.display = 'inline';
+    dom['platform-row'].querySelectorAll('.platform-hint').forEach((el) => el.remove());
+    sc.platforms.forEach((pf) => {
+      const span = document.createElement('span');
+      span.className = 'platform-hint';
+      span.textContent = pf;
+      dom['platform-row'].appendChild(span);
+    });
+  }
+
+  /* 编辑切换 */
   function onEdit() {
-    // 生成中不允许编辑
     if (state.generating) return;
     state.editing = !state.editing;
     if (state.editing) {
       dom['result-text'].setAttribute('contenteditable', 'true');
-      dom['result-text'].classList.remove('done');
-      dom['btn-edit'].textContent = '完成';
       dom['result-text'].focus();
-      // 光标移到末尾
+      dom['btn-edit'].textContent = '完成';
       const range = document.createRange();
       range.selectNodeContents(dom['result-text']);
       range.collapse(false);
@@ -317,20 +371,16 @@
       sel.addRange(range);
     } else {
       dom['result-text'].setAttribute('contenteditable', 'false');
-      dom['result-text'].classList.add('done');
       dom['btn-edit'].textContent = '编辑';
-      // 从 DOM 读回最新文本，同步 state
       state.result = dom['result-text'].textContent;
       updateCharCount(state.result);
     }
   }
 
   /* ============================================================
-   * 七、Prompt 5 维拼接
+   * 八、Prompt 拼接（保持不变）
    * ============================================================ */
-
-  // 维度 3：场景专属细节库（从 scenarios 数据动态生成，支持自定义）
-  function buildScenarioPrompt(scenarioId) {
+  function buildScenarioPrompt() {
     const s = getCurrentScenario();
     if (!s) return '';
     return `当前场景：${s.label}。
@@ -339,12 +389,11 @@
 可选的微缺点（>80 字时优先从这里挑 1 个融入）：${s.flaws.join('、')}。`;
   }
 
-  // 组装 messages：system = 5 维拼接，user = 关键词
   function buildMessages() {
     const systemPrompt = [
       CONFIG.prompt.base,
       CONFIG.prompt.reviewType[state.reviewType],
-      buildScenarioPrompt(state.scenario),
+      buildScenarioPrompt(),
       CONFIG.prompt.platform[state.platform],
       CONFIG.prompt.wordCount[state.wordCount],
     ].join('\n\n');
@@ -361,32 +410,26 @@
   }
 
   /* ============================================================
-   * 八、核心流程：生成 / 换一条
+   * 九、核心流程：生成 / 换一条
    * ============================================================ */
   async function onGenerate() {
-    // 防重入
     if (state.generating) return;
-    // 若正在编辑，先退出编辑态
     if (state.editing) onEdit();
 
-    // 检查 API 配置：如果使用云函数代理（默认配置自带 baseUrl），无需 apiKey
-    // 只有当用户清空了 baseUrl 且没填 apiKey 时，才引导设置
     if (!state.settings.baseUrl && !state.settings.apiKey) {
       openSettings();
       toast('请先配置 API Key 或接口地址');
       return;
     }
 
-    // 取消任何残留流
     if (state.abortController) state.abortController.abort();
     const ac = new AbortController();
     state.abortController = ac;
 
     setState({ generating: true, result: '' });
-    showResultCard();
+    showResultSheet();
     resetResultUI();
-    dom['result-text'].classList.add('cursor-blink');
-    dom['result-text'].classList.remove('done');
+    dom['result-text'].innerHTML = `<div class="loading-wrap"><div class="dots"><span></span><span></span><span></span></div>正在为你生成...</div>`;
 
     const messages = buildMessages();
     let acc = '';
@@ -396,7 +439,6 @@
         { ...state.settings, messages },
         { signal: ac.signal },
         (delta) => {
-          // 校验：丢弃过时流的 delta（换一条后旧流残留）
           if (ac !== state.abortController) return;
           acc += delta;
           state.result = acc;
@@ -405,10 +447,8 @@
         }
       );
 
-      // 流式完成后校验当前流仍有效
       if (ac !== state.abortController) return;
 
-      // 清洗结果（兜底去引号/前缀）
       const cleaned = cleanResult(acc);
       if (cleaned !== acc) {
         acc = cleaned;
@@ -417,10 +457,8 @@
         updateCharCount(acc);
       }
 
-      // 停止闪烁光标
-      dom['result-text'].classList.add('done');
+      showPlatforms();
 
-      // 存历史
       Store.addHistory({
         content: acc,
         scenario: state.scenario,
@@ -430,30 +468,27 @@
         keyword: state.keyword,
       });
     } catch (err) {
-      if (ac !== state.abortController) return; // 过时流，忽略
+      if (ac !== state.abortController) return;
       const isAbort = err && (err.type === 'aborted' || err.name === 'AbortError');
       if (!isAbort) {
         showError((err && err.message) || '生成失败，请重试');
       }
     } finally {
-      // 仅当当前 ac 仍是自己时才重置状态（避免换一条后旧 finally 覆盖新状态）
       if (ac === state.abortController) {
         setState({ generating: false, abortController: null });
       }
     }
   }
 
-  // 换一条：先 abort 当前，绕过防重入守卫，重新生成
   function onRegenerate() {
-    // 若正在编辑，先退出编辑态
     if (state.editing) onEdit();
     if (state.abortController) state.abortController.abort();
-    state.generating = false; // 直接置位，绕过 onGenerate 守卫，不触发 UI
+    state.generating = false;
     onGenerate();
   }
 
   /* ============================================================
-   * 九、复制
+   * 十、复制
    * ============================================================ */
   async function copyText(text) {
     try {
@@ -461,8 +496,7 @@
         await navigator.clipboard.writeText(text);
         return true;
       }
-    } catch (_) { /* 降级 */ }
-    // 降级 execCommand
+    } catch (_) {}
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed';
@@ -476,41 +510,38 @@
   }
 
   async function onCopy() {
-    // 从 DOM 取最新文本（编辑后可能与 state.result 不同步）
     const text = dom['result-text'].textContent;
-    if (!text) return;
+    if (!text || text.includes('正在')) return;
     const ok = await copyText(text);
     if (ok) {
-      dom['btn-copy'].textContent = '已复制';
-      toast('已复制到剪贴板');
-      setTimeout(() => { dom['btn-copy'].textContent = '一键复制'; }, CONFIG.ui.copyToastMs);
+      dom['btn-copy'].innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>已复制`;
+      toast('已复制，去发布吧');
+      setTimeout(() => {
+        dom['btn-copy'].innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制去发布`;
+      }, 2000);
     } else {
-      toast('复制失败，请手动选择');
+      toast('可以手动选择复制');
     }
   }
 
   /* ============================================================
-   * 十、设置弹窗
+   * 十一、设置弹窗
    * ============================================================ */
   function openSettings() {
     dom['settings-apikey'].value = state.settings.apiKey || '';
     dom['settings-baseurl'].value = state.settings.baseUrl || '';
     dom['settings-model'].value = state.settings.model || CONFIG.api.defaultModel;
-    dom['settings-overlay'].classList.remove('hidden');
+    dom['settings-overlay'].classList.add('show');
   }
 
   function closeSettings() {
-    dom['settings-overlay'].classList.add('hidden');
+    dom['settings-overlay'].classList.remove('show');
   }
 
   function saveSettings() {
     const apiKey = dom['settings-apikey'].value.trim();
     const baseUrl = dom['settings-baseurl'].value.trim();
     const model = dom['settings-model'].value.trim() || CONFIG.api.defaultModel;
-    if (!apiKey) {
-      toast('请填写 API Key');
-      return;
-    }
     Store.setSettings({ apiKey, baseUrl, model });
     setState({ settings: Store.getSettings() });
     closeSettings();
@@ -518,119 +549,110 @@
   }
 
   /* ============================================================
-   * 十一、历史记录侧边栏
+   * 十二、历史记录
    * ============================================================ */
   function openHistory() {
     renderHistory();
-    dom['history-overlay'].classList.remove('hidden');
-    dom['history-sidebar'].classList.add('sidebar-open');
+    dom['history-overlay'].classList.add('show');
+    dom['history-sidebar'].classList.add('show');
   }
 
   function closeHistory() {
-    dom['history-overlay'].classList.add('hidden');
-    dom['history-sidebar'].classList.remove('sidebar-open');
+    dom['history-overlay'].classList.remove('show');
+    dom['history-sidebar'].classList.remove('show');
   }
 
   function renderHistory() {
     const list = Store.getHistory();
     dom['history-list'].innerHTML = '';
     if (list.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'text-sm text-gray-400 text-center py-10';
-      empty.textContent = '暂无历史记录';
-      dom['history-list'].appendChild(empty);
+      dom['history-list'].innerHTML = '<div class="history-empty">暂无历史记录</div>';
       return;
     }
     list.forEach((item) => {
-      const card = document.createElement('div');
-      card.className = 'rounded-xl bg-gray-50 dark:bg-[#2a2a2a] p-3 space-y-2';
-
-      const meta = document.createElement('div');
-      meta.className = 'flex items-center justify-between text-xs text-gray-400';
-      meta.innerHTML = `<span>${labelOf(CONFIG.scenarios, item.scenario)} · ${labelOf(CONFIG.reviewTypes, item.reviewType)}</span><span>${formatTime(item.time)}</span>`;
-
-      const content = document.createElement('p');
-      content.className = 'text-sm leading-relaxed line-clamp-3';
-      content.style.display = '-webkit-box';
-      content.style.webkitLineClamp = '3';
-      content.style.webkitBoxOrient = 'vertical';
-      content.style.overflow = 'hidden';
-      content.textContent = item.content;
-
-      const actions = document.createElement('div');
-      actions.className = 'flex gap-2';
-
-      const btnCopy = document.createElement('button');
-      btnCopy.className = 'flex-1 h-9 min-tap rounded-full bg-gray-200 dark:bg-gray-600 text-xs font-medium active:scale-95 transition';
-      btnCopy.textContent = '复制';
-      btnCopy.addEventListener('click', async () => {
-        const ok = await copyText(item.content);
-        toast(ok ? '已复制到剪贴板' : '复制失败，请手动选择');
-      });
-
-      const btnReuse = document.createElement('button');
-      btnReuse.className = 'flex-1 h-9 min-tap rounded-full bg-brand text-white text-xs font-medium active:scale-95 transition';
-      btnReuse.textContent = '复用';
-      btnReuse.addEventListener('click', () => {
-        // 回填 5 个参数
+      const card = document.createElement('article');
+      card.className = 'history-item';
+      const sceneLabel = item.scenario === 'custom'
+        ? '自定义'
+        : labelOf(CONFIG.scenarios, item.scenario);
+      const moodLabel = labelOf(CONFIG.reviewTypes, item.reviewType);
+      card.innerHTML = `
+        <div class="history-meta">
+          <span>${escapeHTML(sceneLabel)} · ${escapeHTML(moodLabel)}</span>
+          <span>${formatTime(item.time)}</span>
+        </div>
+        <p class="history-content">${escapeHTML(item.content)}</p>
+        <div class="history-actions">
+          <button data-action="reuse">复用</button>
+          <button data-action="copy">复制</button>
+          <button data-action="delete">删除</button>
+        </div>`;
+      card.querySelector('[data-action="reuse"]').addEventListener('click', () => {
         setState({
           scenario: item.scenario,
           reviewType: item.reviewType,
           wordCount: item.wordCount,
-          platform: item.platform,
           keyword: item.keyword || '',
         });
         dom['keyword-input'].value = item.keyword || '';
         closeHistory();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        // 自动重新生成
         setTimeout(() => onGenerate(), 300);
       });
-
-      actions.appendChild(btnCopy);
-      actions.appendChild(btnReuse);
-      card.appendChild(meta);
-      card.appendChild(content);
-      card.appendChild(actions);
+      card.querySelector('[data-action="copy"]').addEventListener('click', async () => {
+        const ok = await copyText(item.content);
+        toast(ok ? '已复制' : '复制失败');
+      });
+      card.querySelector('[data-action="delete"]').addEventListener('click', () => {
+        Store.deleteHistory(item.id);
+        renderHistory();
+        toast('已删除');
+      });
       dom['history-list'].appendChild(card);
     });
   }
 
   function onClearHistory() {
     if (Store.getHistory().length === 0) { toast('暂无历史记录'); return; }
-    if (!confirm('确定清空全部历史记录？此操作不可恢复。')) return;
+    if (!confirm('确定清空全部历史记录？')) return;
     Store.clearHistory();
     renderHistory();
-    toast('已清空历史记录');
+    toast('已清空历史');
   }
 
   /* ============================================================
-   * 十二、暗黑模式
+   * 十三、主题切换（三档循环）
    * ============================================================ */
+  const themeIcons = {
+    light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+    dark: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+    system: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  };
+
   function applyTheme() {
     const t = state.theme;
     const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const dark = t === 'dark' || (t === 'system' && sysDark);
     document.documentElement.classList.toggle('dark', dark);
-    // 切换图标
-    dom['icon-sun'].classList.toggle('hidden', dark);
-    dom['icon-moon'].classList.toggle('hidden', !dark);
+    dom['icon-theme'].innerHTML = themeIcons[t] || themeIcons.system;
+    dom['btn-theme'].title = t === 'system' ? '跟随系统' : t === 'light' ? '浅色模式' : '深色模式';
   }
 
-  function toggleTheme() {
-    const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
-    state.theme = next;
-    Store.setTheme(next);
+  function cycleTheme() {
+    const order = ['system', 'light', 'dark'];
+    state.theme = order[(order.indexOf(state.theme) + 1) % order.length];
+    Store.setTheme(state.theme);
     applyTheme();
+    toast(state.theme === 'system' ? '跟随系统' : state.theme === 'light' ? '浅色模式' : '深色模式');
   }
 
   /* ============================================================
-   * 十三、事件绑定
+   * 十四、事件绑定
    * ============================================================ */
   function bindEvents() {
     // 关键词输入
-    dom['keyword-input'].addEventListener('input', (e) => {
-      state.keyword = e.target.value.replace(/[\r\n]+/g, ' ').trim();
+    dom['keyword-input'].addEventListener('input', () => {
+      state.keyword = dom['keyword-input'].value.replace(/[\r\n]+/g, ' ').trim();
+      renderQuickKeywords();
     });
 
     // 生成 / 换一条 / 复制 / 编辑
@@ -642,6 +664,14 @@
     // 结果区编辑时实时更新字数
     dom['result-text'].addEventListener('input', () => {
       if (state.editing) updateCharCount(dom['result-text'].textContent);
+    });
+
+    // 点击 sheet 遮罩关闭
+    dom['sheet-overlay'].addEventListener('click', (e) => {
+      if (e.target === dom['sheet-overlay']) {
+        if (state.generating) return;
+        closeResultSheet();
+      }
     });
 
     // 设置弹窗
@@ -658,28 +688,28 @@
     dom['history-overlay'].addEventListener('click', closeHistory);
     dom['btn-clear-history'].addEventListener('click', onClearHistory);
 
-    // 暗黑模式
-    dom['btn-theme'].addEventListener('click', toggleTheme);
-    // 跟随系统变化
+    // 主题切换
+    dom['btn-theme'].addEventListener('click', cycleTheme);
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (state.theme === 'system') applyTheme();
     });
 
-    // 移动端键盘弹出时，关键词输入框滚动到可视区
+    // 移动端键盘弹出时滚动到可视区
     dom['keyword-input'].addEventListener('focus', () => {
       setTimeout(() => dom['keyword-input'].scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
     });
 
-    // ESC 关闭弹窗/侧边栏
+    // ESC 关闭弹窗
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!dom['settings-overlay'].classList.contains('hidden')) closeSettings();
-      if (!dom['history-overlay'].classList.contains('hidden')) closeHistory();
+      if (dom['sheet-overlay'].classList.contains('show')) closeResultSheet();
+      if (dom['settings-overlay'].classList.contains('show')) closeSettings();
+      if (dom['history-overlay'].classList.contains('show')) closeHistory();
     });
   }
 
   /* ============================================================
-   * 十四、初始化
+   * 十五、初始化
    * ============================================================ */
   function init() {
     cacheDom();
@@ -687,7 +717,9 @@
     renderTags();
     updatePlaceholder();
     renderQuickKeywords();
-    updateGenerateBtn();
+    applyMoodColor();
+    updateGenBtnText();
+    updateGenBtn();
     applyTheme();
     bindEvents();
   }

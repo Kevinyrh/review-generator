@@ -1,218 +1,936 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>真人质感评价生成器</title>
-  <!-- 内联 SVG favicon，避免 favicon.ico 404 -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23FF7A45'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'>评</text></svg>">
-  <!-- 暗色 FOUC 预防：在 Tailwind 加载前根据 localStorage 决定 .dark，避免白屏闪烁 -->
-  <script>
-    (function () {
-      try {
-        var raw = localStorage.getItem('rrzpg:theme');
-        var t = raw ? JSON.parse(raw) : 'system';
-      } catch (e) { var t = 'system'; }
-      var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      if (dark) document.documentElement.classList.add('dark');
-    })();
-  </script>
-  <!-- Tailwind CSS v3 CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            brand: { DEFAULT: '#FF7A45', hover: '#F26A35' },
-            bglight: '#FFF8F5',
-            bgdark: '#121212',
-            cardlight: '#FFFFFF',
-            carddark: '#1E1E1E',
-          },
-        },
-      },
-    };
-  </script>
-  <style>
-    :root { --brand: #FF7A45; --brand-hover: #F26A35; }
-    html, body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-    }
-    body { -webkit-tap-highlight-color: transparent; }
-    /* 移动端可点击区域最小高度 */
-    .min-tap { min-height: 44px; }
-    /* 打字机闪烁光标 */
-    .cursor-blink::after { content: '▋'; animation: blink 1s steps(2) infinite; color: var(--brand); margin-left: 1px; }
-    .cursor-blink.done::after { animation: none; opacity: 0; }
-    @keyframes blink { 50% { opacity: 0; } }
-    /* 平滑显隐 */
-    .fade-in { animation: fadeIn 0.3s ease both; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-    /* 侧边栏滑入 */
-    .sidebar-open { transform: translateX(0) !important; }
-    /* 隐藏滚动条但保留滚动 */
-    .scrollbar-thin::-webkit-scrollbar { width: 4px; }
-    .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.3); border-radius: 4px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>真人质感评价生成器</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23F07040'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'>评</text></svg>">
+<script>
+  (function () {
+    try {
+      var raw = localStorage.getItem('rrzpg:theme');
+      var t = raw ? JSON.parse(raw) : 'system';
+    } catch (e) { var t = 'system'; }
+    var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (dark) document.documentElement.classList.add('dark');
+  })();
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+button { font-family: inherit; }
+
+:root {
+  --bg: #F7F5F2;
+  --surface: #FFFFFF;
+  --brand: #F07040;
+  --brand-light: #FFF0EA;
+  --text-primary: #1A1A1A;
+  --text-secondary: #888;
+  --text-muted: #BBBBBB;
+  --border: #E8E8E8;
+  --radius-card: 16px;
+  --radius-pill: 100px;
+  --current-mood: #4CAF82;
+  --current-mood-light: rgba(76,175,130,0.12);
+}
+
+html.dark {
+  color-scheme: dark;
+  --bg: #141414;
+  --surface: #202020;
+  --text-primary: #F3F3F3;
+  --text-secondary: #B8B8B8;
+  --text-muted: #777;
+  --border: #333;
+}
+
+body {
+  background: var(--bg);
+  font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.phone {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ── HEADER ── */
+.header {
+  padding: 12px 20px 10px;
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.logo-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--current-mood);
+  transition: background 0.4s ease;
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.icon-btn {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-secondary);
+  padding: 0;
+}
+.icon-btn:hover { border-color: var(--current-mood); color: var(--current-mood); }
+.icon-btn svg { width: 16px; height: 16px; }
+
+.header-right { display: flex; gap: 8px; justify-self: end; }
+
+/* ── CONTENT ── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 20px 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── MOOD CARD ── */
+.mood-card {
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 10px;
+  border: 1.5px solid var(--border);
+  transition: border-color 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.mood-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--current-mood);
+  transition: background 0.4s ease;
+  border-radius: 20px 20px 0 0;
+}
+
+.mood-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.mood-options {
+  display: flex;
+  gap: 8px;
+}
+
+.mood-opt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px 9px;
+  border-radius: 13px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  position: relative;
+}
+
+.mood-opt .mood-emoji {
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+
+.mood-opt .mood-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+
+.mood-opt:active .mood-emoji { transform: scale(1.15); }
+
+.mood-opt.active {
+  border-color: var(--current-mood);
+  background: var(--surface);
+}
+.mood-opt.active .mood-name { color: var(--current-mood); font-weight: 700; }
+
+.mood-opt.active::after {
+  content: '';
+  position: absolute;
+  bottom: 8px;
+  width: 16px; height: 2px;
+  background: var(--current-mood);
+  border-radius: 1px;
+  transition: background 0.3s;
+}
+
+/* ── SECTION ── */
+.section {
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 10px;
+  border: 1.5px solid var(--border);
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.section-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ── SCENE ── */
+.scene-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scene-scroll::-webkit-scrollbar { display: none; }
+
+.scene-item {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 13px 8px;
+  border-radius: 13px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.18s;
+  user-select: none;
+}
+
+.scene-item .s-icon { font-size: 19px; line-height: 1; }
+.scene-item .s-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.scene-item.active {
+  background: var(--current-mood);
+  border-color: var(--current-mood);
+}
+.scene-item.active .s-name { color: white; font-weight: 700; }
+
+/* ── KEYWORDS ── */
+.kw-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.kw-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1.5px dashed #D0D0D0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  background: transparent;
+}
+
+.kw-chip .kw-plus {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1;
+  color: #CCC;
+  transition: color 0.15s;
+}
+
+.kw-chip:active {
+  border-color: var(--current-mood);
+  color: var(--current-mood);
+  border-style: solid;
+}
+.kw-chip:active .kw-plus { color: var(--current-mood); }
+
+.kw-chip.added {
+  border-style: solid;
+  border-color: var(--current-mood);
+  background: var(--current-mood-light);
+  color: var(--current-mood);
+}
+.kw-chip.added .kw-plus { color: var(--current-mood); }
+
+.kw-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 16px;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.kw-input::placeholder { color: var(--text-muted); }
+.kw-input:focus { border-color: var(--current-mood); }
+
+/* ── LENGTH ── */
+.length-row {
+  display: flex;
+  gap: 8px;
+}
+
+.len-opt {
+  flex: 1;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.len-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: block;
+}
+
+.len-chars {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 2px;
+}
+
+.len-opt.active {
+  border-color: var(--current-mood);
+  background: var(--current-mood-light);
+}
+.len-opt.active .len-name { color: var(--current-mood); }
+.len-opt.active .len-chars { color: var(--current-mood); opacity: 0.7; }
+
+/* ── FOOTER ── */
+.footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 10px 20px 32px;
+  background: linear-gradient(to top, var(--bg) 75%, transparent);
+  z-index: 20;
+}
+
+.gen-btn {
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--current-mood);
+  color: white;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--current-mood) 35%, transparent);
+  transition: all 0.3s ease;
+}
+
+.gen-btn:active { transform: scale(0.97); filter: brightness(0.97); }
+.gen-btn:disabled { opacity: 0.6; }
+
+.gen-btn svg { width: 18px; height: 18px; }
+.gen-btn .spinner { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── RESULT SHEET ── */
+.sheet-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10,10,10,0.45);
+  z-index: 100;
+  align-items: flex-end;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.sheet-overlay.show { display: flex; animation: fadeIn 0.2s; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border-radius: 28px 28px 0 0;
+  padding: 0 0 40px;
+  animation: slideUp 0.3s cubic-bezier(0.32,0.72,0,1);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.sheet-handle {
+  width: 36px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 14px auto 20px;
+}
+
+.sheet-top {
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.sheet-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.meta-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 100px;
+  background: var(--current-mood-light);
+  color: var(--current-mood);
+  font-weight: 600;
+}
+
+.result-body {
+  padding: 20px 20px 0;
+}
+
+.result-text {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  min-height: 60px;
+  white-space: pre-wrap;
+  outline: none;
+  border-radius: 14px;
+}
+
+.result-text[contenteditable="true"] {
+  background: var(--bg);
+  border: 1.5px solid var(--current-mood);
+  padding: 12px;
+}
+
+.loading-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.dots span {
+  display: inline-block;
+  width: 5px; height: 5px;
+  background: var(--current-mood);
+  border-radius: 50%;
+  animation: bounce 1.2s ease infinite;
+}
+.dots span:nth-child(2) { animation-delay: 0.15s; }
+.dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes bounce {
+  0%,60%,100% { transform: translateY(0); opacity: 0.3; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+
+.platform-row {
+  display: flex;
+  gap: 6px;
+  padding: 16px 20px 0;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.platform-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 100px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.platform-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.char-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 10px 20px 0;
+  text-align: right;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px 0;
+}
+
+.btn-ghost {
+  flex: 1;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn-ghost:active { border-color: var(--text-secondary); }
+.btn-ghost svg { width: 15px; height: 15px; }
+
+.btn-fill {
+  flex: 1.4;
+  background: var(--current-mood);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn-fill:active { filter: brightness(0.95); }
+.btn-fill svg { width: 15px; height: 15px; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: #111;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 18px;
+  border-radius: 100px;
+  opacity: 0;
+  transition: all 0.22s ease;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 999;
+  max-width: 90%;
+  text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── SETTINGS ── */
+.settings-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10,10,10,0.5);
+  z-index: 110;
+  align-items: flex-end;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.settings-overlay.show { display: flex; animation: fadeIn 0.2s; }
+
+.settings-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border-radius: 28px 28px 0 0;
+  padding: 0 0 40px;
+  animation: slideUp 0.3s cubic-bezier(0.32,0.72,0,1);
+}
+
+.settings-body {
+  padding: 0 20px;
+}
+
+.settings-body label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.settings-body input {
+  width: 100%;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 16px;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  margin-bottom: 16px;
+}
+.settings-body input:focus { border-color: var(--current-mood); }
+
+.settings-tip {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: -8px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* ── HISTORY DRAWER ── */
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10,10,10,0.38);
+  z-index: 180;
+  backdrop-filter: blur(2px);
+}
+.drawer-overlay.show { display: block; }
+
+.history-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(360px, 92vw);
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 190;
+  transform: translateX(100%);
+  transition: transform 0.24s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -18px 0 50px rgba(0,0,0,0.16);
+}
+.history-drawer.show { transform: translateX(0); }
+
+.drawer-head {
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.drawer-head h2 {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.drawer-actions { display: flex; gap: 8px; }
+.drawer-link {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.drawer-link:active { color: var(--current-mood); }
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+.history-empty {
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 13px;
+  padding: 42px 0;
+}
+.history-item {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--bg);
+}
+.history-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.history-content {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.65;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.history-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.history-actions button {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 0;
+  cursor: pointer;
+}
+.history-actions button:active {
+  border-color: var(--current-mood);
+  color: var(--current-mood);
+}
+
+.disclaimer {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.7;
+  padding: 4px 16px 0;
+}
+</style>
 </head>
-<body class="bg-bglight dark:bg-bgdark text-gray-800 dark:text-gray-100 min-h-screen transition-colors duration-300">
-  <div class="max-w-[480px] mx-auto min-h-screen flex flex-col relative">
+<body>
 
-    <!-- 顶部导航栏：设置 + 标题 + 历史 + 暗黑模式 -->
-    <header class="flex items-center justify-between px-3 py-2 sticky top-0 bg-bglight/90 dark:bg-bgdark/90 backdrop-blur z-20 border-b border-gray-100 dark:border-gray-800">
-      <button id="btn-settings" aria-label="设置" class="min-tap w-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-        <!-- 齿轮图标 -->
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
+<div class="phone">
+  <!-- HEADER -->
+  <div class="header">
+    <button class="icon-btn" id="btn-theme" aria-label="切换主题" title="切换主题">
+      <svg id="icon-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </button>
+    <span class="header-title">评价生成器</span>
+    <div class="header-right">
+      <button class="icon-btn" id="btn-settings" aria-label="设置" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
-      <h1 class="text-base font-semibold select-none">真人质感评价生成器</h1>
-      <div class="flex items-center">
-        <button id="btn-history" aria-label="历史记录" class="min-tap w-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          <!-- 历史图标 -->
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
-          </svg>
-        </button>
-        <button id="btn-theme" aria-label="切换主题" class="min-tap w-11 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          <!-- 太阳图标（浅色模式显示，点击切暗） -->
-          <svg id="icon-sun" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-          </svg>
-          <!-- 月亮图标（暗色模式显示） -->
-          <svg id="icon-moon" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-        </button>
-      </div>
-    </header>
-
-    <!-- 主体内容区 -->
-    <main class="flex-1 px-5 pb-32 pt-4 space-y-5">
-
-      <!-- 评价类型选择 -->
-      <section>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">评价类型</p>
-        <div id="review-type-tags" class="flex flex-wrap gap-2"></div>
-      </section>
-
-      <!-- 场景类型选择（横向滑动） -->
-      <section>
-        <div class="flex items-center justify-between mb-2">
-          <p class="text-xs text-gray-500 dark:text-gray-400">场景类型</p>
-          <p class="text-xs text-gray-400 dark:text-gray-500">左右滑动 👉</p>
-        </div>
-        <div id="scenario-tags" class="flex gap-2 overflow-x-auto scrollbar-thin pb-1" style="-webkit-overflow-scrolling: touch; -ms-overflow-style: none; scrollbar-width: none;">
-          <!-- 隐藏滚动条但保留滚动 -->
-          <style>#scenario-tags::-webkit-scrollbar { display: none; }</style>
-        </div>
-      </section>
-
-      <!-- 关键词输入框 -->
-      <section>
-        <div id="quick-keywords" class="flex flex-wrap gap-2 mb-2"></div>
-        <input id="keyword-input" type="text" maxlength="30" autocomplete="off"
-          class="w-full h-11 rounded-xl px-4 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-base focus:border-brand focus:outline-none transition-colors"
-          placeholder="如：配送快，汤没撒">
-      </section>
-
-      <!-- 字数选择 -->
-      <section>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">字数</p>
-        <div id="word-count-tags" class="flex flex-wrap gap-2"></div>
-      </section>
-
-      <!-- 结果展示卡片（生成前隐藏） -->
-      <section id="result-card" class="hidden rounded-xl bg-white dark:bg-carddark p-5 shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition-all duration-300">
-        <div id="result-text" contenteditable="false" class="text-base leading-relaxed whitespace-pre-wrap cursor-blink focus:outline-none focus:ring-2 focus:ring-brand/30 rounded-lg transition-shadow"></div>
-        <p id="result-error" class="hidden text-sm text-red-500 mt-2"></p>
-        <div class="text-right mt-3">
-          <span id="char-count" class="text-xs text-gray-400">共 0 字</span>
-        </div>
-      </section>
-
-      <!-- 操作按钮区（结果卡片下方，三按钮并排等宽） -->
-      <section id="result-actions" class="hidden flex gap-3">
-        <button id="btn-edit" class="flex-1 h-11 min-tap rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-medium active:scale-95 transition">编辑</button>
-        <button id="btn-copy" class="flex-1 h-11 min-tap rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-medium active:scale-95 transition">一键复制</button>
-        <button id="btn-regenerate" class="flex-1 h-11 min-tap rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-medium active:scale-95 transition">换一条</button>
-      </section>
-
-      <!-- 免责声明 -->
-      <p class="text-xs text-gray-400 text-center leading-relaxed pt-2 px-2">
-        本工具仅用于辅助润色真实评价，禁止用于虚假评价刷单，请遵守各平台规则
-      </p>
-    </main>
-
-    <!-- 底部生成按钮（固定底部，loading 时文字变「生成中...」+ 旋转图标） -->
-    <footer class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] px-5 pb-5 pt-3 bg-bglight/90 dark:bg-bgdark/90 backdrop-blur z-20">
-      <button id="btn-generate"
-        class="w-full h-12 rounded-full bg-brand text-white font-medium active:scale-95 transition disabled:opacity-60 flex items-center justify-center gap-2">
-        <svg id="gen-spinner" class="hidden animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/>
-        </svg>
-        <span id="gen-btn-text">生成评价</span>
+      <button class="icon-btn" id="btn-history" aria-label="历史记录" title="历史记录">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>
       </button>
-    </footer>
-  </div>
-
-  <!-- 设置弹窗 -->
-  <div id="settings-overlay" class="hidden fixed inset-0 bg-black/50 z-40 flex items-end sm:items-center justify-center p-4">
-    <div class="w-full max-w-[420px] rounded-xl bg-white dark:bg-carddark p-5 space-y-4 fade-in">
-      <div class="flex justify-between items-center">
-        <h2 class="font-semibold text-base">API 设置</h2>
-        <button id="settings-close" class="min-tap w-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="关闭">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-      <div>
-        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">API Key</label>
-        <input id="settings-apikey" type="password" autocomplete="off"
-          class="w-full h-11 rounded-xl px-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
-          placeholder="sk-...">
-      </div>
-      <div>
-        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">接口地址（已预置云函数代理，无需修改）</label>
-        <input id="settings-baseurl" type="text" autocomplete="off"
-          class="w-full h-11 rounded-xl px-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
-          placeholder="https://api.deepseek.com/v1">
-        <span class="block text-[11px] text-gray-400 mt-1">默认已配置代理，打开即用。如需用自己的 Key，填写接口地址并填入下方 API Key</span>
-      </div>
-      <div>
-        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">模型名称</label>
-        <input id="settings-model" type="text" autocomplete="off"
-          class="w-full h-11 rounded-xl px-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-carddark text-sm focus:border-brand focus:outline-none transition-colors"
-          placeholder="deepseek-chat">
-      </div>
-      <button id="settings-save" class="w-full h-12 min-tap rounded-full bg-brand text-white font-medium active:scale-95 transition">保存</button>
     </div>
   </div>
 
-  <!-- 历史记录侧边栏 -->
-  <div id="history-overlay" class="hidden fixed inset-0 bg-black/40 z-40"></div>
-  <aside id="history-sidebar" class="fixed top-0 right-0 h-full w-[85%] max-w-[360px] bg-white dark:bg-carddark z-50 translate-x-full transition-transform duration-300 flex flex-col">
-    <header class="flex items-center justify-between p-4 border-b dark:border-gray-700 shrink-0">
-      <h2 class="font-semibold text-base">历史记录</h2>
-      <div class="flex items-center gap-1">
-        <button id="btn-clear-history" class="text-xs text-red-500 min-tap px-3 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition">清空</button>
-        <button id="history-close" class="min-tap w-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="关闭">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- MOOD (评价类型) -->
+    <div class="mood-card" id="mood-card">
+      <div class="mood-label">这次体验</div>
+      <div class="mood-options" id="review-type-tags"></div>
+    </div>
+
+    <!-- SCENE -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">消费场景</span>
+        <span class="section-hint">左右滑动</span>
       </div>
-    </header>
-    <div id="history-list" class="overflow-y-auto p-3 space-y-2 flex-1 scrollbar-thin"></div>
-  </aside>
+      <div class="scene-scroll" id="scenario-tags"></div>
+    </div>
 
-  <!-- Toast 轻提示 -->
-  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-black/80 text-white text-sm z-50 whitespace-nowrap max-w-[90%] text-center"></div>
+    <!-- KEYWORDS -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">加点细节</span>
+        <span class="section-hint">让评价更像真人写的</span>
+      </div>
+      <div class="kw-grid" id="quick-keywords"></div>
+      <input class="kw-input" id="keyword-input" type="text" maxlength="30" autocomplete="off" placeholder="如：配送快，汤没撒" />
+    </div>
 
-  <!-- 脚本按依赖顺序加载：config → storage → api → app -->
-  <script src="js/config.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+    <!-- LENGTH -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">评价长度</span>
+        <span class="section-hint">中评最容易被平台推荐</span>
+      </div>
+      <div class="length-row" id="word-count-tags"></div>
+    </div>
+
+    <p class="disclaimer">
+      仅用于润色真实体验 · 禁止虚假刷单<br>请遵守各平台社区规范
+    </p>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <button class="gen-btn" id="btn-generate">
+      <svg id="gen-spinner" class="hidden spinner" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"/></svg>
+      <span id="gen-btn-text">帮我写一条满意好评</span>
+    </button>
+  </div>
+</div>
+
+<!-- RESULT SHEET -->
+<div class="sheet-overlay" id="sheet-overlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-top">
+      <span class="sheet-title">生成结果</span>
+      <div class="sheet-meta">
+        <span class="meta-tag" id="meta-scene">外卖</span>
+        <span class="meta-tag" id="meta-mood">满意</span>
+      </div>
+    </div>
+    <div class="result-body">
+      <div class="result-text" id="result-text" contenteditable="false"></div>
+    </div>
+    <div class="char-count" id="char-count"></div>
+    <p id="result-error" class="hidden" style="color:var(--mood-bad);font-size:13px;padding:10px 20px 0;"></p>
+    <div class="platform-row" id="platform-row">
+      <span class="platform-label" id="platform-label">适合发布于：</span>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-ghost" id="btn-edit">编辑</button>
+      <button class="btn-ghost" id="btn-regenerate">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        换一条
+      </button>
+      <button class="btn-fill" id="btn-copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        复制去发布
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="settings-overlay" id="settings-overlay">
+  <div class="settings-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-top">
+      <span class="sheet-title">API 设置</span>
+      <button class="drawer-link" id="settings-close">关闭</button>
+    </div>
+    <div class="settings-body">
+      <label>API Key</label>
+      <input id="settings-apikey" type="password" autocomplete="off" placeholder="sk-...">
+      <label>接口地址（已预置云函数代理，无需修改）</label>
+      <input id="settings-baseurl" type="text" autocomplete="off" placeholder="https://api.deepseek.com/v1">
+      <p class="settings-tip">默认已配置代理，打开即用。如需用自己的 Key，填写接口地址并填入上方 API Key</p>
+      <label>模型名称</label>
+      <input id="settings-model" type="text" autocomplete="off" placeholder="deepseek-chat">
+      <button class="gen-btn" id="settings-save" style="margin-top:8px">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY DRAWER -->
+<div class="drawer-overlay" id="history-overlay"></div>
+<aside class="history-drawer" id="history-sidebar">
+  <div class="drawer-head">
+    <h2>历史记录</h2>
+    <div class="drawer-actions">
+      <button class="drawer-link" id="btn-clear-history">清空</button>
+      <button class="drawer-link" id="history-close">关闭</button>
+    </div>
+  </div>
+  <div class="history-list" id="history-list"></div>
+</aside>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- 脚本按依赖顺序加载 -->
+<script src="js/config.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
