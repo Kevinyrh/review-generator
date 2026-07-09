@@ -670,6 +670,13 @@
     dom['btn-copy'].addEventListener('click', onCopy);
     dom['btn-edit'].addEventListener('click', onEdit);
 
+    // 结果区直接点击即可编辑
+    dom['result-text'].addEventListener('click', () => {
+      if (!state.editing && !state.generating) {
+        onEdit();
+      }
+    });
+
     // 结果区编辑时实时更新字数
     dom['result-text'].addEventListener('input', () => {
       if (state.editing) updateCharCount(dom['result-text'].textContent);
