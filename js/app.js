@@ -68,7 +68,7 @@
       'meta-scene', 'meta-mood', 'platform-row', 'platform-label',
       'sheet-close', 'sheet-handle-close',
       'btn-edit', 'btn-copy', 'btn-regenerate',
-      'btn-generate', 'gen-spinner', 'gen-btn-text',
+      'btn-generate', 'gen-btn-text',
       'btn-settings', 'btn-history', 'btn-theme', 'icon-theme',
       'settings-overlay', 'settings-close', 'settings-apikey', 'settings-baseurl',
       'settings-model', 'settings-save',
@@ -297,11 +297,9 @@
     if (state.generating) {
       dom['btn-generate'].disabled = true;
       dom['gen-btn-text'].textContent = '生成中...';
-      dom['gen-spinner'].classList.remove('hidden');
     } else {
       dom['btn-generate'].disabled = false;
       updateGenBtnText();
-      dom['gen-spinner'].classList.add('hidden');
     }
   }
 
