@@ -218,7 +218,7 @@
     CONFIG.wordCounts.forEach((item) => {
       const btn = document.createElement('div');
       btn.className = `len-opt${item.id === state.wordCount ? ' active' : ''}`;
-      btn.innerHTML = `<span class="len-name">${item.label}</span><span class="len-chars">${item.chars || ''}</span>`;
+      btn.innerHTML = `<span class="len-name">${item.label}</span>`;
       btn.addEventListener('click', () => setState({ wordCount: item.id }));
       container.appendChild(btn);
     });
