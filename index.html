@@ -490,10 +490,17 @@ body {
   border-radius: 14px;
 }
 
-.result-text[contenteditable="true"] {
+.result-text[contenteditable="true"],
+.result-text.editing {
   background: var(--bg);
   border: 1.5px solid var(--current-mood);
   padding: 12px;
+  border-radius: 14px;
+  caret-color: var(--current-mood);
+}
+
+.sheet-handle {
+  cursor: pointer;
 }
 
 .loading-wrap {
@@ -860,12 +867,13 @@ body {
 <!-- RESULT SHEET -->
 <div class="sheet-overlay" id="sheet-overlay">
   <div class="sheet">
-    <div class="sheet-handle"></div>
+    <div class="sheet-handle" id="sheet-handle-close"></div>
     <div class="sheet-top">
       <span class="sheet-title">生成结果</span>
       <div class="sheet-meta">
         <span class="meta-tag" id="meta-scene">外卖</span>
         <span class="meta-tag" id="meta-mood">满意</span>
+        <button class="drawer-link" id="sheet-close" style="margin-left:4px;font-size:13px;">✕</button>
       </div>
     </div>
     <div class="result-body">

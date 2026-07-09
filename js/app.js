@@ -66,6 +66,7 @@
       'keyword-input', 'quick-keywords',
       'sheet-overlay', 'result-text', 'result-error', 'char-count',
       'meta-scene', 'meta-mood', 'platform-row', 'platform-label',
+      'sheet-close', 'sheet-handle-close',
       'btn-edit', 'btn-copy', 'btn-regenerate',
       'btn-generate', 'gen-spinner', 'gen-btn-text',
       'btn-settings', 'btn-history', 'btn-theme', 'icon-theme',
@@ -322,6 +323,7 @@
   function resetResultUI() {
     dom['result-text'].textContent = '';
     dom['result-text'].setAttribute('contenteditable', 'false');
+    dom['result-text'].classList.remove('editing');
     dom['result-error'].classList.add('hidden');
     dom['result-error'].textContent = '';
     dom['char-count'].textContent = '';
@@ -361,16 +363,21 @@
     state.editing = !state.editing;
     if (state.editing) {
       dom['result-text'].setAttribute('contenteditable', 'true');
-      dom['result-text'].focus();
+      dom['result-text'].classList.add('editing');
       dom['btn-edit'].textContent = '完成';
-      const range = document.createRange();
-      range.selectNodeContents(dom['result-text']);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
+      // 延迟 focus，确保 contenteditable 已生效
+      setTimeout(() => {
+        dom['result-text'].focus();
+        const range = document.createRange();
+        range.selectNodeContents(dom['result-text']);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }, 50);
     } else {
       dom['result-text'].setAttribute('contenteditable', 'false');
+      dom['result-text'].classList.remove('editing');
       dom['btn-edit'].textContent = '编辑';
       state.result = dom['result-text'].textContent;
       updateCharCount(state.result);
@@ -510,8 +517,10 @@
   }
 
   async function onCopy() {
-    const text = dom['result-text'].textContent;
-    if (!text || text.includes('正在')) return;
+    // 如果正在生成中，不允许复制
+    if (state.generating) { toast('正在生成中，请稍候'); return; }
+    const text = dom['result-text'].textContent.trim();
+    if (!text) { toast('还没有内容可复制'); return; }
     const ok = await copyText(text);
     if (ok) {
       dom['btn-copy'].innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>已复制`;
@@ -670,8 +679,21 @@
     dom['sheet-overlay'].addEventListener('click', (e) => {
       if (e.target === dom['sheet-overlay']) {
         if (state.generating) return;
+        if (state.editing) onEdit();
         closeResultSheet();
       }
+    });
+
+    // 关闭按钮和拖拽条
+    dom['sheet-close'].addEventListener('click', () => {
+      if (state.generating) return;
+      if (state.editing) onEdit();
+      closeResultSheet();
+    });
+    dom['sheet-handle-close'].addEventListener('click', () => {
+      if (state.generating) return;
+      if (state.editing) onEdit();
+      closeResultSheet();
     });
 
     // 设置弹窗
